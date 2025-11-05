@@ -9,9 +9,7 @@ import re
 # --- Streamlit Page Setup ---
 st.set_page_config(page_title="📦 SMW Box Contents Formatter", page_icon="📦", layout="wide")
 st.title("📦 SMW Box Contents Formatter")
-st.caption(
-    "Elegant Black Edition — Process, Pivot, and Format your Excel data instantly."
-)
+st.caption("Elegant Black Edition — Process, Pivot, and Format your Excel data instantly.")
 
 # --- File Uploader ---
 uploaded_file = st.file_uploader("📁 Select an Excel file", type=["xlsx", "xls"])
@@ -44,9 +42,7 @@ if uploaded_file:
                 .fillna(0)
                 .astype(int)
             )
-            df_clean.rename(
-                columns={"Box X": "Box Number", "Sku Units": "Qty"}, inplace=True
-            )
+            df_clean.rename(columns={"Box X": "Box Number", "Sku Units": "Qty"}, inplace=True)
 
             # --- Pivot Table ---
             pivot_table = pd.pivot_table(
@@ -78,37 +74,27 @@ if uploaded_file:
                 st.warning(f"⚠️ Could not read Carton Weight from Page1_1: {e}")
                 carton_weights = []
 
-            total_carton_weight = sum(
-                [w for w in carton_weights if isinstance(w, (int, float))]
-            )
+            total_carton_weight = sum([w for w in carton_weights if isinstance(w, (int, float))])
             total_carton_weight_plus35 = total_carton_weight + 35
 
             # --- Extract Dimensions ---
-            dimension_pattern = (
-                r"\b\d{1,3}\.\d{1,2}X\d{1,3}\.\d{1,2}X\d{1,3}\.\d{1,2}\b"
-            )
+            dimension_pattern = r"\b\d{1,3}\.\d{1,2}X\d{1,3}\.\d{1,2}X\d{1,3}\.\d{1,2}\b"
             dimension_data = []
             for _, row in df.iterrows():
                 for col in df.columns:
                     val = str(row[col])
                     if re.match(dimension_pattern, val):
                         length, width, height = val.split("X")
-                        dimension_data.append(
-                            (float(length), float(width), float(height))
-                        )
+                        dimension_data.append((float(length), float(width), float(height)))
 
             # --- Box Dimensions DataFrame ---
             dim_df = pd.DataFrame()
             if dimension_data:
-                dim_df = pd.DataFrame(
-                    dimension_data, columns=["Length", "Width", "Height"]
-                )
+                dim_df = pd.DataFrame(dimension_data, columns=["Length", "Width", "Height"])
                 # Box Number sequence
                 dim_df.insert(0, "Box Number", range(1, len(dim_df) + 1))
                 # Carton Weight column
-                weights_column = carton_weights[: len(dim_df)] + [""] * max(
-                    0, len(dim_df) - len(carton_weights)
-                )
+                weights_column = carton_weights[: len(dim_df)] + [""] * max(0, len(dim_df) - len(carton_weights))
                 dim_df.insert(1, "Carton Weight", weights_column)
 
             # --- Write to Excel ---
@@ -122,9 +108,7 @@ if uploaded_file:
             # --- Format Excel ---
             output.seek(0)
             wb = load_workbook(output)
-            yellow_fill = PatternFill(
-                start_color="FFF2CC", end_color="FFF2CC", fill_type="solid"
-            )
+            yellow_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
             header_font = Font(bold=True, size=14)
             align_center = Alignment(horizontal="center", vertical="center")
             thin_border = Border(
@@ -143,9 +127,7 @@ if uploaded_file:
                         cell.alignment = align_center
                         cell.border = thin_border
                 # Cells
-                for row in ws.iter_rows(
-                    min_row=2, max_row=ws.max_row, max_col=ws.max_column
-                ):
+                for row in ws.iter_rows(min_row=2, max_row=ws.max_row, max_col=ws.max_column):
                     for col_idx, cell in enumerate(row, start=1):
                         cell.border = thin_border
                         cell.alignment = align_center
@@ -160,10 +142,21 @@ if uploaded_file:
                 for col_idx in range(1, ws.max_column + 1):
                     ws.column_dimensions[get_column_letter(col_idx)].width = 18
 
+            # --- Apply Formatting ---
             for sheet_name in wb.sheetnames:
                 ws = wb[sheet_name]
+
                 if sheet_name == "Box Dimensions":
                     style_sheet(ws, keep_decimals=True, force_int_cols=[1])
+
+                elif sheet_name == "Pivot Table":
+                    # Apply normal styling first
+                    style_sheet(ws, keep_decimals=False)
+                    # Then reduce column width by half (excluding column A)
+                    for col_idx in range(2, ws.max_column + 1):  # start from column B
+                        current_width = ws.column_dimensions[get_column_letter(col_idx)].width
+                        ws.column_dimensions[get_column_letter(col_idx)].width = current_width / 2
+
                 else:
                     style_sheet(ws, keep_decimals=False)
 
@@ -190,23 +183,18 @@ if uploaded_file:
                     [
                         ws_dim.cell(row=r, column=carton_col).value
                         for r in range(2, last_row + 1)
-                        if isinstance(
-                            ws_dim.cell(row=r, column=carton_col).value, (int, float)
-                        )
+                        if isinstance(ws_dim.cell(row=r, column=carton_col).value, (int, float))
                     ]
                 )
                 total_weight += 35
                 total_row = last_row + 1
-                ws_dim.cell(
-                    row=total_row, column=1, value="Total Carton Weight (+35):"
-                )  # Fully in Column A
+                ws_dim.cell(row=total_row, column=1, value="Total Carton Weight (+35):")
                 ws_dim.cell(row=total_row, column=carton_col, value=total_weight)
                 for col in [1, carton_col]:
                     cell = ws_dim.cell(row=total_row, column=col)
                     cell.font = Font(bold=True)
                     cell.alignment = Alignment(horizontal="center", vertical="center")
                     cell.border = thin_border
-                # Widen Column A so text fits
                 ws_dim.column_dimensions["A"].width = 30
 
             # Save formatted Excel
