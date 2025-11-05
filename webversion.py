@@ -5,6 +5,7 @@ from openpyxl import load_workbook
 from openpyxl.styles import PatternFill, Font, Border, Side, Alignment
 from openpyxl.utils import get_column_letter
 import re
+import os
 
 # --- Streamlit Page Setup ---
 st.set_page_config(page_title="📦 SMW Box Contents Formatter", page_icon="📦", layout="wide")
@@ -16,6 +17,11 @@ uploaded_file = st.file_uploader("📁 Select an Excel file", type=["xlsx", "xls
 
 if uploaded_file:
     try:
+        # Extract filename for output
+        input_filename = uploaded_file.name
+        base_name, ext = os.path.splitext(input_filename)
+        output_filename = f"{base_name} formatted{ext}"
+
         # Read main sheet
         df = pd.read_excel(uploaded_file, header=10, engine="openpyxl")
         df.columns = df.columns.astype(str).str.strip()
@@ -59,19 +65,18 @@ if uploaded_file:
             total_qty = df_clean["Qty"].sum()
             total_boxes = df_clean["Box Number"].nunique()
 
-            # --- Extract Carton Weights from Page1_1 column G (bold only, skip last) ---
+            # --- Extract Carton Weights ---
             carton_weights = []
             try:
                 wb_input = load_workbook(uploaded_file, data_only=True)
                 ws_page1 = wb_input["Page1_1"]
-                for row in ws_page1.iter_rows(min_row=1, max_col=7):  # G = column 7
+                for row in ws_page1.iter_rows(min_row=1, max_col=7):
                     cell = row[6]
                     if cell.font.bold and isinstance(cell.value, (int, float)):
                         carton_weights.append(cell.value)
                 if carton_weights:
-                    carton_weights = carton_weights[:-1]  # skip last total
-            except Exception as e:
-                st.warning(f"⚠️ Could not read Carton Weight from Page1_1: {e}")
+                    carton_weights = carton_weights[:-1]
+            except Exception:
                 carton_weights = []
 
             total_carton_weight = sum([w for w in carton_weights if isinstance(w, (int, float))])
@@ -87,13 +92,11 @@ if uploaded_file:
                         length, width, height = val.split("X")
                         dimension_data.append((float(length), float(width), float(height)))
 
-            # --- Box Dimensions DataFrame ---
+            # --- Box Dimensions ---
             dim_df = pd.DataFrame()
             if dimension_data:
                 dim_df = pd.DataFrame(dimension_data, columns=["Length", "Width", "Height"])
-                # Box Number sequence
                 dim_df.insert(0, "Box Number", range(1, len(dim_df) + 1))
-                # Carton Weight column
                 weights_column = carton_weights[: len(dim_df)] + [""] * max(0, len(dim_df) - len(carton_weights))
                 dim_df.insert(1, "Carton Weight", weights_column)
 
@@ -105,7 +108,6 @@ if uploaded_file:
                 if not dim_df.empty:
                     dim_df.to_excel(writer, sheet_name="Box Dimensions", index=False)
 
-            # --- Format Excel ---
             output.seek(0)
             wb = load_workbook(output)
             yellow_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
@@ -119,14 +121,12 @@ if uploaded_file:
             )
 
             def style_sheet(ws, keep_decimals=False, force_int_cols=[]):
-                # Header
                 for row in ws.iter_rows(min_row=1, max_row=1):
                     for cell in row:
                         cell.fill = yellow_fill
                         cell.font = header_font
                         cell.alignment = align_center
                         cell.border = thin_border
-                # Cells
                 for row in ws.iter_rows(min_row=2, max_row=ws.max_row, max_col=ws.max_column):
                     for col_idx, cell in enumerate(row, start=1):
                         cell.border = thin_border
@@ -138,29 +138,26 @@ if uploaded_file:
                                 cell.number_format = "0.00"
                             else:
                                 cell.number_format = "0"
-                # Column width
                 for col_idx in range(1, ws.max_column + 1):
                     ws.column_dimensions[get_column_letter(col_idx)].width = 18
 
             # --- Apply Formatting ---
             for sheet_name in wb.sheetnames:
                 ws = wb[sheet_name]
-
                 if sheet_name == "Box Dimensions":
                     style_sheet(ws, keep_decimals=True, force_int_cols=[1])
-
                 elif sheet_name == "Pivot Table":
-                    # Apply normal styling first
                     style_sheet(ws, keep_decimals=False)
-                    # Reduce width to 1/4 (half again from previous half) excluding UPC
-                    for col_idx in range(2, ws.max_column + 1):  # start from column B
+                    # Reduce width to 1/4 excluding UPC
+                    for col_idx in range(2, ws.max_column + 1):
                         current_width = ws.column_dimensions[get_column_letter(col_idx)].width
                         ws.column_dimensions[get_column_letter(col_idx)].width = current_width / 4
-
+                    # Make UPC column slightly wider for clarity
+                    ws.column_dimensions["A"].width = 25
                 else:
                     style_sheet(ws, keep_decimals=False)
 
-            # --- Add Totals to Box Contents ---
+            # --- Totals for Box Contents ---
             ws_contents = wb["Box Contents"]
             total_row = ws_contents.max_row + 2
             ws_contents[f"A{total_row}"] = "Total Qty:"
@@ -174,10 +171,10 @@ if uploaded_file:
                     cell.border = thin_border
                     cell.alignment = align_center
 
-            # --- Add Total Carton Weight + 35 to Box Dimensions ---
+            # --- Total Carton Weight ---
             if "Box Dimensions" in wb.sheetnames:
                 ws_dim = wb["Box Dimensions"]
-                carton_col = 2  # Column B
+                carton_col = 2
                 last_row = ws_dim.max_row
                 total_weight = sum(
                     [
@@ -197,16 +194,15 @@ if uploaded_file:
                     cell.border = thin_border
                 ws_dim.column_dimensions["A"].width = 30
 
-            # Save formatted Excel
             formatted_output = BytesIO()
             wb.save(formatted_output)
             formatted_output.seek(0)
 
             # --- Streamlit Download ---
             st.download_button(
-                label="💾 Download Formatted Excel",
+                label=f"💾 Download {output_filename}",
                 data=formatted_output,
-                file_name="processed_box_contents.xlsx",
+                file_name=output_filename,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
 
