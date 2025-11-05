@@ -8,7 +8,7 @@ import re
 
 # --- Streamlit Page Setup ---
 st.set_page_config(page_title="📦 SMW Box Contents Formatter", page_icon="📦", layout="wide")
-st.title("📦 SMW Box Contents")
+st.title("📦 SMW Box Contents Formatter")
 st.caption(
     "Elegant Black Edition — Process, Pivot, and Format your Excel data instantly."
 )
