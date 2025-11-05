@@ -152,10 +152,10 @@ if uploaded_file:
                 elif sheet_name == "Pivot Table":
                     # Apply normal styling first
                     style_sheet(ws, keep_decimals=False)
-                    # Then reduce column width by half (excluding column A)
+                    # Reduce width to 1/4 (half again from previous half) excluding UPC
                     for col_idx in range(2, ws.max_column + 1):  # start from column B
                         current_width = ws.column_dimensions[get_column_letter(col_idx)].width
-                        ws.column_dimensions[get_column_letter(col_idx)].width = current_width / 2
+                        ws.column_dimensions[get_column_letter(col_idx)].width = current_width / 4
 
                 else:
                     style_sheet(ws, keep_decimals=False)
